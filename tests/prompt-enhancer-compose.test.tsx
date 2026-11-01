@@ -58,7 +58,7 @@ const stubbornPeer = (tier: 'prepend' | 'append') => ({
 test('The row is drawn with the engine drawing beneath it', async ($, on) => {
   engine(on)
   const ui = await mount($)
-  expect(await keysOf(ui)).toEqual(['enhance', 'send'])
+  expect(await keysOf(ui)).toEqual(['enhance', 'send', 'mode'])
   expect(await hasEngine(ui)).toBe(true)
   await ui.unmount()
 })
@@ -66,7 +66,7 @@ test('The row is drawn with the engine drawing beneath it', async ($, on) => {
 test('Peer outside, composing: both rows and the engine drawing show', { plugins: [composingPeer('prepend')] }, async ($, on) => {
   engine(on)
   const ui = await mount($)
-  expect(await keysOf(ui)).toEqual(['peer-row', 'enhance', 'send'])
+  expect(await keysOf(ui)).toEqual(['peer-row', 'enhance', 'send', 'mode'])
   expect(await hasEngine(ui)).toBe(true)
   await ui.unmount()
 })
@@ -74,7 +74,7 @@ test('Peer outside, composing: both rows and the engine drawing show', { plugins
 test('Peer inside, composing: both rows and the engine drawing show', { plugins: [composingPeer('append')] }, async ($, on) => {
   engine(on)
   const ui = await mount($)
-  expect(await keysOf(ui)).toEqual(['enhance', 'send', 'peer-row'])
+  expect(await keysOf(ui)).toEqual(['enhance', 'send', 'mode', 'peer-row'])
   expect(await hasEngine(ui)).toBe(true)
   await ui.unmount()
 })
@@ -82,7 +82,7 @@ test('Peer inside, composing: both rows and the engine drawing show', { plugins:
 test('Peer inside that draws alone: the row, outside it, still shows above the peer', { plugins: [stubbornPeer('append')] }, async ($, on) => {
   engine(on)
   const ui = await mount($)
-  expect(await keysOf(ui)).toEqual(['enhance', 'send', 'peer-alone'])
+  expect(await keysOf(ui)).toEqual(['enhance', 'send', 'mode', 'peer-alone'])
   await ui.unmount()
 })
 

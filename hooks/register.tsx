@@ -1,8 +1,36 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
+import {
+  DEFAULT_SETTINGS,
+  MODES,
+  PROFILES,
+  analysisRequest,
+  assemble,
+  evaluate,
+  extractPrompt,
+  parseAnalysis,
+  quickRequest,
+  redactSecrets,
+  referencedPaths,
+  resolveProfile,
+  revisionRequest,
+  route,
+  sendsHere,
+  skillCandidates,
+  substantive,
+  verifySkills,
+} from './core'
+import type { Analysis, Mode, ProfileId, Question, Settings, SkillInfo, TargetSetting } from './core'
+import type { EnhancerPhase, EnhancerPreview, EnhancerQuestion } from '../types'
 
-const isBusy = atom({ plugin: 'prompt-enhancer-plus', key: 'isBusy' } as const, false)
+const phase = atom({ plugin: 'prompt-enhancer-plus', key: 'phase' } as const, 'idle' as EnhancerPhase)
+const step = atom({ plugin: 'prompt-enhancer-plus', key: 'step' } as const, '')
 const note = atom({ plugin: 'prompt-enhancer-plus', key: 'note' } as const, null)
+const question = atom({ plugin: 'prompt-enhancer-plus', key: 'question' } as const, null as EnhancerQuestion | null)
+const preview = atom({ plugin: 'prompt-enhancer-plus', key: 'preview' } as const, null as EnhancerPreview | null)
+const modeAtom = atom({ plugin: 'prompt-enhancer-plus', key: 'mode' } as const, 'smart' as Mode)
+// Bumped by every start and every cancel: a result whose version is stale is thrown away.
+const version = atom({ plugin: 'prompt-enhancer-plus', key: 'version' } as const, 0)
 
 // Claude Code's own action for focusing plugin rows, and its built-in chord.
 const FOCUS_ACTION = 'abovePrompt:focus'
@@ -10,59 +38,29 @@ const DEFAULT_FOCUS_KEY = 'ctrl+x tab'
 const focusKey = atom({ plugin: 'prompt-enhancer-plus', key: 'focusKey' } as const, DEFAULT_FOCUS_KEY)
 
 const FALLBACK_MODEL = 'sonnet'
+const CALL_TIMEOUT_MS = 90_000
+const CLAUDE_MD_CHARS = 2500
 
-// Written to Anthropic's prompting guidance for current Claude models: explicit instructions,
-// the reason behind each constraint, XML-tagged sections, success criteria, and calm wording
-// (no ALL-CAPS or "MUST"), since newer models follow instructions closely and overreact to emphasis.
-const RULES = `Goal: rewrite the rough prompt below into a clear, complete prompt that a coding agent in this project can act on from start to finish. The author types fast, so the draft often has typos, broken grammar and missing structure; your job is to fix all of that and turn it into the best prompt for its kind of task.
+// Module-level, per load: the in-band answer a clarification waits on, and the running call's abort.
+let answerWaiter: ((answer: string | null) => void) | null = null
+let controller: AbortController | null = null
 
-Do these steps in order:
+class Cancelled extends Error {}
 
-1. Correct the text. Fix every spelling, typo, grammar and punctuation error, and turn broken phrasing into plain, correct sentences. Read through the typos to the meaning the author intended ("cployt thgive" in a sentence about skills means "Claude might need"). Keep code, file names, paths, commands, identifiers, URLs, version numbers and quoted text exactly as written, because changing them would break them.
+let settings: Settings = DEFAULT_SETTINGS
+let clarifyStyle: 'dialog' | 'band' = 'dialog'
 
-2. Keep the author's intent. Every requirement comes from what they asked for or clearly implied. Add no new features or scope. Keep their language: if they wrote in English, answer in English.
-
-3. Classify the task as one of: build, fix, review, research, write, refactor, data/analysis, design/UI, ops/deploy, or question. Then structure the rewrite with the matching template below. Use only the sections that carry real content; leave a section out rather than fill it with guesses.
-
-<templates>
-build: <task> what to build and why · <context> project, stack, files involved · <requirements> concrete behaviour, as bullets · <constraints> what to keep unchanged, conventions to follow · <done_when> tests or checks that prove it works
-fix: <problem> what is wrong, with the exact error or symptom · <expected> correct behaviour · <context> where it happens, steps to reproduce · <approach> find the root cause before changing code; add a test that fails before the fix and passes after · <done_when>
-review: <scope> what to review (files, diff, PR) · <focus> what to check: correctness, security, performance, style · <output> findings ranked by severity, each with file:line and a suggested fix
-research: <question> the exact question · <scope> sources, time range, depth · <output> answer first, then evidence, with sources cited
-write: <task> the document and its purpose · <audience> who reads it · <tone_and_length> · <must_cover> key points · <output> format
-refactor: <task> what to restructure and why · <constraints> behaviour must not change; existing tests must keep passing · <done_when>
-data/analysis: <data> sources and their shape · <question> what to find out · <output> tables, charts or numbers wanted, with the method stated
-design/UI: <task> screen or component · <users_and_goal> · <requirements> layout, states, accessibility, responsiveness · <done_when> how to check it visually
-ops/deploy: <task> · <environment> · <safety> confirm before anything destructive or irreversible; how to roll back · <done_when>
-question: one clear question with the context needed to answer it; no template sections.
-</templates>
-
-4. Pick skills. From the installed skills listed in <installed_skills> (and any skill listing in the conversation), choose the 1 to 3 that best fit this task, and add one line near the top: "Use these skills: name-a, name-b." Name only skills that appear in that list, spelled exactly as listed, because a made-up name would fail to load. If none fits, leave the line out. Keep any skill, plugin or command the author named themselves.
-
-5. Fit the project. Use only paths and facts that the project folder, its files, CLAUDE.md or the conversation show. Do not invent file names or APIs.
-
-6. Write it in the author's voice, as a direct instruction to the agent ("Add…", "Find…"), not as a request for suggestions, because a vague ask gets suggestions instead of action. Match length to the request: a one-line ask becomes a short prompt with a few tagged sections, not a page. Every added line carries a fact the agent needs.
-
-Reply with the rewritten prompt only, wrapped in <prompt></prompt>. Stop after </prompt>.`
-
-const extract = (reply: string) => {
-  return (reply.match(/<prompt>([\s\S]*?)<\/prompt>/)?.[1] ?? reply).trim()
-}
-
-async function fallbackContext($: EngineInterface): Promise<string> {
-  return `Project folder: ${await $.session.cwd()}`
-}
-
-// The skill names the session lists for the model, so the rewrite can name ones that exist.
-// Names only: descriptions for hundreds of skills would crowd out the draft.
-async function installedSkills($: EngineInterface): Promise<string> {
-  try {
-    const { context } = await $.session.usage({ breakdown: 'summary' })
-    const names = context.breakdown?.skills?.skillFrontmatter.map(s => s.name) ?? []
-    return names.length ? names.join(', ') : '(none listed)'
-  } catch {
-    return '(none listed)'
+function readSettings(options: Record<string, unknown>) {
+  const num = (v: unknown, d: number, lo: number, hi: number) => (typeof v === 'number' && v >= lo && v <= hi ? v : d)
+  const target = (['auto', 'claude', 'gpt', 'reasoning', 'gemini', 'universal'] as const).find(t => t === options.target) ?? 'auto'
+  settings = {
+    mode: MODES.find(m => m === options.mode) ?? 'smart',
+    target,
+    askBelow: num(options.askBelow, DEFAULT_SETTINGS.askBelow, 0, 1),
+    assumeBelow: num(options.assumeBelow, DEFAULT_SETTINGS.assumeBelow, 0, 1),
+    maxRounds: Math.round(num(options.maxRounds, DEFAULT_SETTINGS.maxRounds, 0, 5)),
   }
+  clarifyStyle = options.clarify === 'band' ? 'band' : 'dialog'
 }
 
 // The chord that focuses the row, as the user's keybindings.json has it: their own
@@ -84,48 +82,299 @@ async function readFocusKey($: EngineInterface): Promise<string | null> {
   return DEFAULT_FOCUS_KEY in chat ? null : DEFAULT_FOCUS_KEY
 }
 
-async function rewrite($: EngineInterface, draft: string): Promise<string> {
-  const ask = `${RULES}\n\n<installed_skills>\n${await installedSkills($)}\n</installed_skills>\n\n<rough_prompt>\n${draft}\n</rough_prompt>`
-  const forked = await $.model.fork({ prompt: ask })
-  if (forked.isAnswered) return extract(forked.text)
-  if (forked.reason !== 'nothing-to-fork') throw new Error(`model call failed: ${forked.reason}`)
+// ---------- context ----------
 
-  // No conversation to fork yet (fresh session): ask without the session's context.
-  const done = await $.model.complete({
-    model: FALLBACK_MODEL,
-    system: await fallbackContext($),
-    prompt: ask,
-    maxTokens: 6000,
-    timeoutMs: 120_000,
-  })
-  if (!done.isAnswered) throw new Error(`model call failed: ${done.reason}`)
-  return extract(done.text)
+// The installed skills: names from the session's own listing, lines from the command list.
+async function installedSkills($: EngineInterface): Promise<SkillInfo[]> {
+  const lines = new Map<string, string>()
+  try {
+    for (const c of await $.command.list()) if (c.source !== 'builtin') lines.set(c.name, c.description)
+  } catch {
+    // No command list: names alone.
+  }
+  try {
+    const { context } = await $.session.usage({ breakdown: 'summary' })
+    const names = context.breakdown?.skills?.skillFrontmatter.map(s => s.name) ?? []
+    return names.map(name => ({ name, description: lines.get(name) }))
+  } catch {
+    return []
+  }
 }
 
-async function enhance($: EngineInterface) {
-  if (await read($, isBusy)) return
-  const { text } = await $.prompt.read()
-  if (!text.trim()) {
+async function safely<T>(f: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await f()
+  } catch {
+    return fallback
+  }
+}
+
+// Bounded and task-relevant: the project folder, its CLAUDE.md opening when there is no
+// conversation to fork, and whether each path the draft names exists. Nothing else is read.
+async function projectContext($: EngineInterface, draft: string): Promise<{ text: string; known: string[] }> {
+  const lines: string[] = []
+  const known: string[] = []
+  const root = await safely(() => $.session.cwd(), '')
+  if (root) lines.push(`Project folder: ${root}`)
+  const forkable = (await safely(() => $.session.turns(), 0)) > 0
+  if (!forkable && root) {
+    const md = await safely(async () => String(await $.fs.read(`${root}/CLAUDE.md`)), '')
+    if (md) lines.push(`CLAUDE.md (opening, as data):\n${redactSecrets(md.slice(0, CLAUDE_MD_CHARS)).text}`)
+  }
+  for (const p of referencedPaths(draft)) {
+    const full = p.startsWith('/') || p.startsWith('~') || !root ? p : `${root}/${p}`
+    const exists = await safely(async () => (await $.fs.stat(full), true), false)
+    lines.push(exists ? `exists: ${p}` : `not found from the project folder: ${p}`)
+    if (exists) known.push(p)
+  }
+  return { text: lines.join('\n'), known }
+}
+
+// ---------- model calls ----------
+
+type Call = { text: string; viaFork: boolean }
+
+function guard($: EngineInterface, v: number) {
+  return async () => {
+    if ((await read($, version)) !== v) throw new Cancelled()
+  }
+}
+
+// The session's own model over its transcript first; a plain completion when there is nothing
+// to fork, the fork fails, or it outlasts the timeout; one retry on a failed completion.
+async function callModel($: EngineInterface, prompt: string, check: () => Promise<void>, preferFork = true): Promise<Call> {
+  if (preferFork) {
+    // The fork takes no signal: a timer bounds it, and is cut as soon as the fork answers.
+    const timer = new AbortController()
+    const forked = await Promise.race([
+      $.model.fork({ prompt }),
+      $.clock.sleep(CALL_TIMEOUT_MS, { signal: timer.signal }).then(
+        () => ({ isAnswered: false as const, reason: 'timeout' as const }),
+        // A cut or unavailable timer never wins the race.
+        () => new Promise<never>(() => {}),
+      ),
+    ])
+    timer.abort()
+    await check()
+    if (forked.isAnswered) return { text: forked.text, viaFork: true }
+  }
+  let reason = ''
+  for (let attempt = 0; attempt < 2; attempt++) {
+    controller = new AbortController()
+    const done = await $.model.complete(
+      { model: FALLBACK_MODEL, prompt, maxTokens: 6000, timeoutMs: CALL_TIMEOUT_MS },
+      { signal: controller.signal },
+    )
+    await check()
+    if (done.isAnswered) return { text: done.text, viaFork: false }
+    reason = done.reason
+    if (done.reason === 'aborted') break
+  }
+  throw new Error(`model call failed: ${reason}`)
+}
+
+async function analyze($: EngineInterface, request: string, check: () => Promise<void>): Promise<Analysis> {
+  const parsed = parseAnalysis((await callModel($, request, check)).text)
+  if (parsed) return parsed
+  // One repair, then give up rather than loop.
+  await update($, step, () => 'Repairing reply…')
+  const repaired = parseAnalysis((await callModel($, `${request}\n\nYour last reply was not the JSON object asked for. Reply with that JSON object only.`, check, false)).text)
+  if (!repaired) throw new Error('the model reply was not valid')
+  return repaired
+}
+
+// ---------- clarification ----------
+
+const RECOMMENDED = ' (Recommended)'
+
+async function clarify($: EngineInterface, q: Question, round: number, check: () => Promise<void>): Promise<string | null> {
+  if (clarifyStyle === 'dialog') {
+    const labels = q.options.map((o, i) => (i === q.recommended ? `${o}${RECOMMENDED}` : o))
+    let picked: string | undefined
+    try {
+      picked = await $.ui.ask(q.question, { options: labels, header: 'Clarify' })
+    } catch {
+      // No dialog here, or it was dismissed: the same question, in the band, where Skip is one key.
+    }
+    await check()
+    if (picked !== undefined) return picked.endsWith(RECOMMENDED) ? picked.slice(0, -RECOMMENDED.length) : picked
+  }
+  await update($, question, () => ({ question: q.question, options: q.options, recommended: q.recommended ?? null, round, maxRounds: settings.maxRounds }))
+  await update($, phase, () => 'clarifying' as EnhancerPhase)
+  const answer = await new Promise<string | null>(resolve => {
+    answerWaiter = resolve
+  })
+  answerWaiter = null
+  await update($, question, () => null)
+  await check()
+  await update($, phase, () => 'working' as EnhancerPhase)
+  return answer
+}
+
+const answerBand = (answer: string | null) => answerWaiter?.(answer)
+
+// ---------- the enhancement ----------
+
+type Result = { prompt: string; analysis?: Analysis; answers: string[]; assumptions: string[]; skills: string[]; dropped: string[] }
+
+async function smart($: EngineInterface, draft: string, mode: Mode, s: Settings, profile: ProfileId, includeSkills: boolean, installed: SkillInfo[], check: () => Promise<void>): Promise<Result> {
+  const ctx = await projectContext($, draft)
+  await check()
+  const skills = skillCandidates(installed, draft)
+  const answers: { question: string; answer: string }[] = []
+  const asked = new Set<string>()
+  const build = () => analysisRequest({ draft, mode, profile, includeSkills, skills, context: ctx.text, answers })
+  await update($, step, () => 'Understanding the request…')
+  let analysis = await analyze($, build(), check)
+  let unresolved = false
+  for (let round = 1; ; round++) {
+    const r = route(analysis, s, draft)
+    const q = analysis.questions.find(x => !asked.has(x.question.toLowerCase()))
+    if ((r !== 'ask' && r !== 'require') || !q) break
+    if (round > s.maxRounds) {
+      unresolved = true
+      break
+    }
+    asked.add(q.question.toLowerCase())
+    const a = await clarify($, q, round, check)
+    if (a === null) {
+      unresolved = true
+      break
+    }
+    answers.push({ question: q.question, answer: a })
+    await update($, step, () => 'Applying your answer…')
+    analysis = await analyze($, build(), check)
+  }
+  const conf = Math.min(...Object.values(analysis.confidence))
+  // Assumptions are shown, labelled and reversible, whenever the reading was not a sure one.
+  const assumptions = unresolved || conf < s.assumeBelow ? analysis.assumptions.slice(0, 5) : []
+  const { kept, dropped } = includeSkills ? verifySkills(analysis.skills, installed, mode === 'deep' ? 5 : 3) : { kept: [], dropped: [] }
+  const shape = (body: string) => assemble(body, { profile, skills: kept, assumptions })
+  const result: Result = { prompt: shape(analysis.prompt), analysis, answers: answers.map(x => x.answer), assumptions, skills: kept, dropped }
+
+  // One bounded self-revision when the checker finds a substantive problem; keep the better one.
+  const evalArgs = { draft, analysis, answers: result.answers, profile, installedSkills: installed, knownPaths: ctx.known, mode }
+  const first = evaluate({ ...evalArgs, prompt: result.prompt })
+  const problems = substantive(first)
+  if (!problems.length) return result
+  await update($, step, () => 'Checking quality…')
+  try {
+    const r = await callModel($, revisionRequest(analysis, analysis.prompt, problems.map(p => p.detail), profile, draft), check)
+    const revised = shape(extractPrompt(r.text))
+    if (evaluate({ ...evalArgs, prompt: revised }).score > first.score) result.prompt = revised
+  } catch (err) {
+    if (err instanceof Cancelled) throw err
+    // A failed revision keeps the first rewrite.
+  }
+  return result
+}
+
+async function enhance($: EngineInterface, opts: { draft?: string } = {}) {
+  const current = await read($, phase)
+  if (current === 'working' || current === 'clarifying') return
+  const box = (await $.prompt.read()).text
+  const prev = await read($, preview)
+  const draft = opts.draft ?? box
+  if (!draft.trim()) {
     $.ui.toast('Type a prompt first')
     return
   }
-  await update($, isBusy, () => true)
+  const v = (await read($, version)) + 1
+  await update($, version, () => v)
+  const check = guard($, v)
+  const mode = await read($, modeAtom)
+  const s = { ...settings, mode }
+  const settle = async () => update($, phase, () => (prev ? 'preview' : 'idle') as EnhancerPhase)
+  await update($, phase, () => 'working' as EnhancerPhase)
   await update($, note, () => null)
+  await update($, step, () => 'Reading context…')
   try {
-    const better = await rewrite($, text)
-    if (!better) throw new Error('empty rewrite')
+    const profile: ProfileId = resolveProfile(s.target, await safely(() => $.session.model(), undefined as string | undefined))
+    const includeSkills = sendsHere(s.target) && mode !== 'quick'
+    const installed = includeSkills ? await installedSkills($) : []
+    let result: Result
+    if (mode === 'quick') {
+      await update($, step, () => 'Correcting…')
+      const r = await callModel($, quickRequest(draft, profile), check)
+      result = { prompt: extractPrompt(r.text), answers: [], assumptions: [], skills: [], dropped: [] }
+    } else {
+      result = await smart($, draft, mode, s, profile, includeSkills, installed, check)
+    }
+
+    const { text: safe, count: redacted } = redactSecrets(result.prompt)
+    if (!safe.trim()) throw new Error('empty rewrite')
+    await check()
     // The person may have kept typing; keep their newer draft rather than clobber it.
-    if ((await $.prompt.read()).text !== text) {
+    if ((await $.prompt.read()).text !== box) {
       await update($, note, () => 'Draft changed while enhancing; rewrite discarded')
+      await settle()
       return
     }
-    const filled = await $.prompt.fill({ text: better })
+    const filled = await $.prompt.fill({ text: safe })
     if (!filled.isFilled) throw new Error(`prompt box refused (${filled.refusal ?? 'unknown'})`)
+    const q = evaluate({ draft, prompt: safe, analysis: result.analysis, answers: result.answers, profile, installedSkills: installed, knownPaths: referencedPaths(draft), mode })
+    await update($, preview, () => ({
+      original: prev?.original ?? draft,
+      enhanced: safe,
+      mode,
+      profile,
+      task: result.analysis?.taskTypes.join(' + ') ?? 'correction',
+      score: q.score,
+      issues: q.issues.map(i => i.detail).slice(0, 3),
+      skills: result.skills,
+      dropped: result.dropped,
+      assumptions: result.assumptions,
+      answers: result.answers,
+      redacted,
+      compare: false,
+    }))
+    await update($, phase, () => 'preview' as EnhancerPhase)
+    if (redacted) await update($, note, () => `${redacted} secret-looking value${redacted > 1 ? 's' : ''} redacted`)
   } catch (err) {
+    if (err instanceof Cancelled) return
     await update($, note, () => `Enhance failed: ${err instanceof Error ? err.message : String(err)}`)
+    await settle()
   } finally {
-    await update($, isBusy, () => false)
+    if ((await read($, version)) === v) await update($, step, () => '')
   }
+}
+
+async function cancel($: EngineInterface) {
+  await update($, version, n => n + 1)
+  controller?.abort()
+  answerBand(null)
+  await update($, question, () => null)
+  await update($, step, () => '')
+  await update($, note, () => 'Enhance cancelled; draft unchanged')
+  const hasPreview = (await read($, preview)) !== null
+  await update($, phase, () => (hasPreview ? 'preview' : 'idle') as EnhancerPhase)
+}
+
+async function restore($: EngineInterface) {
+  const p = await read($, preview)
+  if (!p) return
+  await $.prompt.fill({ text: p.original })
+  await update($, preview, () => null)
+  await update($, phase, () => 'idle' as EnhancerPhase)
+  await update($, note, () => 'Original restored')
+}
+
+async function accept($: EngineInterface) {
+  await update($, preview, () => null)
+  await update($, note, () => null)
+  await update($, phase, () => 'idle' as EnhancerPhase)
+}
+
+async function retry($: EngineInterface) {
+  const p = await read($, preview)
+  if (p) await enhance($, { draft: p.original })
+}
+
+async function cycleMode($: EngineInterface) {
+  const now = await read($, modeAtom)
+  const next = MODES[(MODES.indexOf(now) + 1) % MODES.length]!
+  await update($, modeAtom, () => next)
+  await safely(() => $.store.set('mode', next), undefined)
 }
 
 async function send($: EngineInterface) {
@@ -136,14 +385,22 @@ async function send($: EngineInterface) {
   }
   await $.prompt.fill({ text: '' })
   await update($, note, () => null)
+  await update($, preview, () => null)
+  await update($, phase, () => 'idle' as EnhancerPhase)
   // asUser: the model reads it as the person's own words, not framed as a plugin message.
   await $.prompt.submit({ text, asUser: true })
 }
 
-export const register: Register = on => {
+const MODE_LABEL: Record<Mode, string> = { quick: 'Quick', smart: 'Smart', deep: 'Deep' }
+
+export const register: Register = (on, options) => {
+  readSettings((options ?? {}) as Record<string, unknown>)
+
   on('session.start', async ($, e, next) => {
     const chord = await readFocusKey($)
     await update($, focusKey, () => chord)
+    const stored = await safely(() => $.store.get('mode'), undefined)
+    await update($, modeAtom, () => MODES.find(m => m === stored) ?? settings.mode)
     return next(e)
   })
 
@@ -154,42 +411,117 @@ export const register: Register = on => {
 
     // Compose: this row, and beneath it whatever the rest of the chain drew (another plugin's band, the engine's).
     const below = await next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const busy = await read($, isBusy)
+    const elements = $.ui.resolve(e)
+    const { Box, Button, Text } = elements
+    // The mobile app draws no field: there the numbered choices and Skip remain.
+    const Input = 'Input' in elements ? elements.Input : undefined
+    const now = await read($, phase)
     const message = await read($, note)
     const chord = await read($, focusKey)
-    // esc is Claude Code's built-in abovePrompt:leave chord: it returns focus to the prompt box.
-    const hint = [chord, 'e enhance', e.props.isWorking ? 's queue' : 's send', 'esc back'].filter(Boolean).join(' · ')
+    const mode = await read($, modeAtom)
+    const target: TargetSetting = settings.target
+    const terminal = e.surface === 'terminal'
+    const sendLabel = e.props.isWorking ? 's queue' : 's send'
+    const modeButton = <Button key="mode" label={`Mode: ${MODE_LABEL[mode]}`} hotkey="m" onPress={() => cycleMode($)} />
+    const targetText = target === 'auto' ? '' : ` · for ${PROFILES[target].label}`
 
-    const row = (
-      <Box>
-        <Text dimColor>Prompt enhancer+ </Text>
-        {busy ? (
-          <Text dimColor>
-            Enhancing…
+    let body
+    if (now === 'working') {
+      const label = (await read($, step)) || 'Enhancing…'
+      body = (
+        <Box>
+          <Text dimColor>{label} </Text>
+          <Button key="cancel" label="Cancel" hotkey="x" onPress={() => cancel($)} />
+        </Box>
+      )
+    } else if (now === 'clarifying') {
+      const q = await read($, question)
+      body = q ? (
+        <Box flexDirection="column">
+          <Text>
+            {q.question} <Text dimColor>({q.round}/{q.maxRounds})</Text>
           </Text>
-        ) : (
           <Box>
-            {/* Not awaited: a rewrite can outlast the 10s ui.press budget; isBusy guards re-entry. */}
-            <Button key="enhance" label="Enhance" hotkey="e" variant="primary" onPress={() => void enhance($)} />
+            {q.options.map((o, i) => (
+              <Box key={`opt-${i}`}>
+                <Button key={`answer-${i + 1}`} label={`${i + 1}. ${o}${i === q.recommended ? ' ★' : ''}`} hotkey={String(i + 1)} onPress={() => answerBand(o)} />
+                <Text> </Text>
+              </Box>
+            ))}
+            <Button key="skip" label="Skip" hotkey="k" onPress={() => answerBand(null)} />
+            <Text> </Text>
+            <Button key="cancel" label="Cancel" hotkey="x" onPress={() => cancel($)} />
+          </Box>
+          {Input ? <Input key="custom" label="Other: " placeholder="type your own answer, Enter to use it" onSubmit={(v: string) => void (v.trim() && answerBand(v.trim()))} /> : null}
+          {terminal ? <Text dimColor>1-{q.options.length} choose · k skip · x cancel · ★ recommended</Text> : null}
+        </Box>
+      ) : null
+    } else if (now === 'preview') {
+      const p = await read($, preview)
+      const summary = p
+        ? [
+            MODE_LABEL[p.mode],
+            p.task,
+            PROFILES[p.profile].label,
+            `quality ${p.score}/100`,
+            p.skills.length ? `skills: ${p.skills.join(', ')}` : '',
+            p.assumptions.length ? `${p.assumptions.length} assumption${p.assumptions.length > 1 ? 's' : ''}` : '',
+          ].filter(Boolean).join(' · ')
+        : ''
+      const hint = [chord, 'a accept', 'c compare', 't retry', 'r restore', 'e enhance', sendLabel, 'esc back'].filter(Boolean).join(' · ')
+      body = (
+        <Box flexDirection="column">
+          <Box>
+            <Button key="accept" label="Accept" hotkey="a" variant="primary" onPress={() => accept($)} />
+            <Text> </Text>
+            <Button key="compare" label={p?.compare ? 'Hide original' : 'Compare'} hotkey="c" onPress={() => update($, preview, x => (x ? { ...x, compare: !x.compare } : x))} />
+            <Text> </Text>
+            <Button key="retry" label="Retry" hotkey="t" onPress={() => void retry($)} />
+            <Text> </Text>
+            <Button key="restore" label="Restore original" hotkey="r" onPress={() => restore($)} />
+            <Text> </Text>
+            <Button key="enhance" label="Enhance" hotkey="e" onPress={() => void enhance($)} />
             <Text> </Text>
             <Button key="send" label="Send" hotkey="s" onPress={() => send($)} />
-            {/* The focus chord is a terminal keybinding; other surfaces click. */}
-            {e.surface === 'terminal' ? <Text dimColor>  {hint}</Text> : null}
+            <Text> </Text>
+            {modeButton}
           </Box>
-        )}
-        {message ? (
-          <Text dimColor>
-            {' '}
-            {message}
-          </Text>
-        ) : null}
-      </Box>
-    )
+          <Text dimColor>{summary}</Text>
+          {p?.compare ? (
+            <Box flexDirection="column">
+              <Text dimColor>Original: {p.original.split('\n').slice(0, 3).join(' ⏎ ').slice(0, 300)}</Text>
+              {p.answers.length ? <Text dimColor>Your answers: {p.answers.join(' · ')}</Text> : null}
+              {p.assumptions.length ? <Text dimColor>Assumptions: {p.assumptions.join(' · ').slice(0, 300)}</Text> : null}
+              {p.dropped.length ? <Text dimColor>Not installed, left out: {p.dropped.join(', ')}</Text> : null}
+              {p.issues.length ? <Text dimColor>Checker: {p.issues.join(' · ').slice(0, 300)}</Text> : null}
+            </Box>
+          ) : null}
+          {terminal ? <Text dimColor>{hint}</Text> : null}
+        </Box>
+      )
+    } else {
+      const hint = [chord, 'e enhance', sendLabel, 'm mode', 'esc back'].filter(Boolean).join(' · ')
+      body = (
+        <Box>
+          {/* Not awaited: a rewrite can outlast the 10s ui.press budget; the phase guards re-entry. */}
+          <Button key="enhance" label="Enhance" hotkey="e" variant="primary" onPress={() => void enhance($)} />
+          <Text> </Text>
+          <Button key="send" label="Send" hotkey="s" onPress={() => send($)} />
+          <Text> </Text>
+          {modeButton}
+          {/* The focus chord is a terminal keybinding; other surfaces click. */}
+          {terminal ? <Text dimColor>  {hint}</Text> : null}
+        </Box>
+      )
+    }
 
     return (
       <Box flexDirection="column">
-        {row}
+        <Box>
+          <Text dimColor>Prompt enhancer++{targetText} </Text>
+          {body}
+        </Box>
+        {message ? <Text dimColor> {message}</Text> : null}
         {below}
       </Box>
     )
