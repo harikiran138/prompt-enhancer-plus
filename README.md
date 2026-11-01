@@ -151,8 +151,8 @@ Both versions ran through the same isolated `claude -p --model sonnet`, with the
 | Unasked risky actions added | 0 | 1 |
 | Prompts naming a skill (all verified installed) | 0 | 25 |
 | Task family correct / primary type correct | n/a | 92% / 74% |
-| Asked when it should (recall) | n/a (never asks) | 100% (7/7) |
-| Asked when it need not | n/a | 30% |
+| Asked when it should (recall) | n/a (never asks) | 100% (6/6) |
+| Asked when it need not | n/a | 30% (13/44) |
 | Median words | 205 | 182 |
 | Median latency | 7.6 s | 19.2 s |
 | Model cost for 50 prompts | $0.63 | $4.10 |
