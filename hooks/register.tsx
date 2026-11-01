@@ -217,7 +217,8 @@ const answerBand = (answer: string | null) => answerWaiter?.(answer)
 
 type Result = { prompt: string; analysis?: Analysis; answers: string[]; assumptions: string[]; skills: string[]; dropped: string[] }
 
-async function smart($: EngineInterface, draft: string, mode: Mode, s: Settings, profile: ProfileId, includeSkills: boolean, installed: SkillInfo[], check: () => Promise<void>): Promise<Result> {
+// interactive: false where nobody can answer (the /enhance command): questions are skipped, assumptions written.
+async function smart($: EngineInterface, draft: string, mode: Mode, s: Settings, profile: ProfileId, includeSkills: boolean, installed: SkillInfo[], check: () => Promise<void>, interactive = true): Promise<Result> {
   const ctx = await projectContext($, draft)
   await check()
   const skills = skillCandidates(installed, draft)
@@ -236,7 +237,7 @@ async function smart($: EngineInterface, draft: string, mode: Mode, s: Settings,
       break
     }
     asked.add(q.question.toLowerCase())
-    const a = await clarify($, q, round, check)
+    const a = interactive ? await clarify($, q, round, check) : null
     if (a === null) {
       unresolved = true
       break
@@ -339,6 +340,40 @@ async function enhance($: EngineInterface, opts: { draft?: string } = {}) {
   }
 }
 
+// /enhance <draft>: the same pipeline without the prompt box, answered as text. Nobody is asked anything.
+async function enhanceCommand($: EngineInterface, draft: string): Promise<string> {
+  if (!draft.trim()) return 'Usage: /enhance <rough prompt>. It prints the enhanced prompt; nothing is sent.'
+  const mode = await read($, modeAtom)
+  const s = { ...settings, mode }
+  const check = async () => {}
+  const profile: ProfileId = resolveProfile(s.target, await safely(() => $.session.model(), undefined as string | undefined))
+  const includeSkills = sendsHere(s.target) && mode !== 'quick'
+  const installed = includeSkills ? await installedSkills($) : []
+  try {
+    const result: Result =
+      mode === 'quick'
+        ? { prompt: extractPrompt((await callModel($, quickRequest(draft, profile), check)).text), answers: [], assumptions: [], skills: [], dropped: [] }
+        : await smart($, draft, mode, s, profile, includeSkills, installed, check, false)
+    const { text: safe, count: redacted } = redactSecrets(result.prompt)
+    const q = evaluate({ draft, prompt: safe, analysis: result.analysis, answers: [], profile, installedSkills: installed, knownPaths: referencedPaths(draft), mode })
+    const facts = [
+      MODE_LABEL[mode],
+      result.analysis?.taskTypes.join(' + ') ?? 'correction',
+      `${PROFILES[profile].label} profile`,
+      `quality ${q.score}/100`,
+      `${installed.length} skills installed`,
+      result.skills.length ? `named: ${result.skills.join(', ')}` : 'no skills named',
+      result.dropped.length ? `left out (not installed): ${result.dropped.join(', ')}` : '',
+      result.analysis ? `confidence ${Math.min(...Object.values(result.analysis.confidence)).toFixed(2)}, risk ${result.analysis.risk}, route ${route(result.analysis, s, draft)}` : '',
+      result.analysis?.questions[0] ? `would ask: ${result.analysis.questions[0].question} [${result.analysis.questions[0].options.join(' | ')}]` : '',
+      redacted ? `${redacted} secret(s) redacted` : '',
+    ].filter(Boolean)
+    return `${safe}\n\n— ${facts.join(' · ')}`
+  } catch (err) {
+    return `Enhance failed: ${err instanceof Error ? err.message : String(err)}`
+  }
+}
+
 async function cancel($: EngineInterface) {
   await update($, version, n => n + 1)
   controller?.abort()
@@ -401,8 +436,11 @@ export const register: Register = (on, options) => {
     await update($, focusKey, () => chord)
     const stored = await safely(() => $.store.get('mode'), undefined)
     await update($, modeAtom, () => MODES.find(m => m === stored) ?? settings.mode)
+    await safely(() => $.command.register({ name: 'enhance', description: 'Rewrite a rough prompt with Prompt Enhancer++ and print it (sends nothing)' }), undefined)
     return next(e)
   })
+
+  on('command.run', { command: 'enhance' }, async ($, e) => ({ text: await enhanceCommand($, e.args) }))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     // The row stays during a running turn: Enhance forks without touching it, and Send queues behind it.

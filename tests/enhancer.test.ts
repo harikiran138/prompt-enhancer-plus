@@ -111,6 +111,8 @@ function reset(fake: Fake, text: string, replies: Reply[]) {
 const mount = ($: Engine, surface: (typeof SURFACES)[number]) =>
   $.ui.mount({ plugin: 'prompt-enhancer-plus', surface, component: 'AbovePrompt', props: PROPS })
 
+const labelOf = async (ui: Awaited<ReturnType<typeof mount>>, key: string) => (await ui.find({ key }))?.props.label
+
 // A clarification waits on the person: start Enhance without awaiting it, then let it reach the question.
 async function startAndWait(clock: ReturnType<typeof mock.clock>, ui: Awaited<ReturnType<typeof mount>>) {
   const pressed = ui.press({ key: 'enhance' })
@@ -153,7 +155,7 @@ test('Enhance falls back to a plain completion before the first turn', async ($,
 test('Enhance leaves the draft alone and says why when the model is unavailable', async ($, on) => {
   const fake = engine(on)
   for (const surface of SURFACES) {
-    reset(fake, 'refactor auth', [{ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded_error', usage: USAGE } as Reply])
+    reset(fake, 'refactor auth', [{ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE } as Reply])
     const ui = await mount($, surface)
     await ui.press({ key: 'enhance' })
     expect(fake.text).toBe('refactor auth')
@@ -285,15 +287,15 @@ test('Compare shows the original; Retry re-enhances the original; Restore puts i
 test('Mode cycles Smart → Deep → Quick, and Quick only corrects', async ($, on) => {
   const fake = engine(on)
   const ui = await mount($, 'terminal')
-  expect(await ui.find({ key: 'mode', label: 'Mode: Smart' })).toBeDefined()
+  expect(await labelOf(ui, 'mode')).toBe('Mode: Smart')
   await ui.press({ key: 'mode' })
-  expect(await ui.find({ key: 'mode', label: 'Mode: Deep' })).toBeDefined()
+  expect(await labelOf(ui, 'mode')).toBe('Mode: Deep')
   reset(fake, 'build a csv export', [ok(analysis('Build a CSV export.'))])
   await ui.press({ key: 'enhance' })
   expect(fake.asks[0]).toContain('Mode: deep.')
   await ui.press({ key: 'accept' })
   await ui.press({ key: 'mode' })
-  expect(await ui.find({ key: 'mode', label: 'Mode: Quick' })).toBeDefined()
+  expect(await labelOf(ui, 'mode')).toBe('Mode: Quick')
   reset(fake, 'plz fix teh typo in README.md', [ok('<prompt>Please fix the typo in README.md.</prompt>')])
   await ui.press({ key: 'enhance' })
   expect(fake.text).toBe('Please fix the typo in README.md.')
@@ -312,7 +314,7 @@ test('Low confidence asks in the band; the choice reaches the next request and t
     const ui = await mount($, surface)
     const pressed = await startAndWait(clock, ui)
     expect(await ui.find({ type: 'Text', text: /What should I prioritize\?/ })).toBeDefined()
-    expect(await ui.find({ key: 'answer-3', label: '3. Both ★' })).toBeDefined()
+    expect(await labelOf(ui, 'answer-3')).toBe('3. Both ★')
     await ui.press({ key: 'answer-3' })
     await pressed
     expect(fake.asks[1]).toContain('Q: What should I prioritize?\nA: Both')
@@ -345,7 +347,7 @@ test('Skip finishes with labelled assumptions and no extra model call', { option
   expect(fake.asks.length).toBe(1)
   expect(fake.text).toContain('Improve the student dashboard.')
   expect(fake.text).toContain('<assumptions>')
-  expect(fake.text).toContain('- Keep the current navigation')
+  expect(fake.text).toContain('Assumed: Keep the current navigation.')
   await ui.unmount()
 })
 
@@ -380,7 +382,7 @@ test('High-risk work with a question asks even at medium confidence', { options:
   const clock = mock.clock(on)
   const medium = {
     risk: 'high',
-    confidence: { intent: 0.7, scope: 0.7, target: 0.7, behavior: 0.7 },
+    confidence: { intent: 0.6, scope: 0.6, target: 0.6, behavior: 0.6 },
     questions: [{ question: 'Which users count as old?', options: ['No login for a year', 'Never verified'] }],
   }
   reset(fake, 'delete old users from production db', [ok(analysis('Delete old users.', medium)), ok(analysis('Find users with no login for a year; confirm before deleting.'))])
@@ -395,12 +397,12 @@ test('High-risk work with a question asks even at medium confidence', { options:
 
 test('Medium confidence on safe work proceeds without asking, with labelled assumptions', async ($, on) => {
   const fake = engine(on)
-  const medium = { confidence: { intent: 0.7, scope: 0.7, target: 0.7, behavior: 0.7 }, assumptions: ['The dashboard is the student home page'], questions: UNSURE.questions }
+  const medium = { confidence: { intent: 0.6, scope: 0.6, target: 0.6, behavior: 0.6 }, assumptions: ['The dashboard is the student home page'], questions: UNSURE.questions }
   reset(fake, 'tidy the student dashboard', [ok(analysis('Tidy the student dashboard layout.', medium))])
   const ui = await mount($, 'terminal')
   await ui.press({ key: 'enhance' })
   expect(fake.asks.length).toBe(1)
-  expect(fake.text).toContain('- The dashboard is the student home page')
+  expect(fake.text).toContain('Assumed: The dashboard is the student home page.')
   await ui.unmount()
 })
 
@@ -516,4 +518,18 @@ test('A substantive checker finding triggers exactly one revision', async ($, on
   expect(fake.asks[1]).toContain('exact tokens changed or dropped: src/auth/login.ts')
   expect(fake.text).toBe('Fix the bug in src/auth/login.ts.')
   await ui.unmount()
+})
+
+test('/enhance prints the rewrite, asks nothing, and leaves the box alone', async ($, on) => {
+  const fake = engine(on)
+  reset(fake, 'my own draft', [ok(analysis('Improve the student dashboard.', { ...UNSURE, skills: ['ui-styling'] }))])
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({}))
+  await $.session.start({ cwd: '/work/app', surface: 'terminal', isInteractive: true })
+  const { text } = await $.command.run({ command: 'enhance', args: 'improve my student dashboard' })
+  expect(text).toContain('Use these skills: ui-styling.')
+  expect(text).toContain('Assumed: Keep the current navigation.')
+  expect(text).toContain('would ask: What should I prioritize?')
+  expect(fake.text).toBe('my own draft')
+  expect((await $.command.run({ command: 'enhance', args: '' })).text).toContain('Usage: /enhance')
 })

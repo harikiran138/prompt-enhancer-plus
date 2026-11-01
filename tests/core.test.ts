@@ -87,12 +87,12 @@ test('Model detection maps names to profiles and unknowns to universal', async (
 test('Routing: sure proceeds, medium assumes, low asks, risky asks, quick never asks, no question never asks', async () => {
   const s = DEFAULT_SETTINGS
   expect(route(analysis({ confidence: conf(0.9), questions: Q }), s, 'add x')).toBe('proceed')
-  expect(route(analysis({ confidence: conf(0.7), questions: Q, assumptions: ['a'] }), s, 'add x')).toBe('assume')
+  expect(route(analysis({ confidence: conf(0.6), questions: Q, assumptions: ['a'] }), s, 'add x')).toBe('assume')
   expect(route(analysis({ confidence: conf(0.4), questions: Q }), s, 'add x')).toBe('ask')
-  expect(route(analysis({ confidence: conf(0.7), questions: Q }), s, 'delete prod users')).toBe('require')
+  expect(route(analysis({ confidence: conf(0.6), questions: Q }), s, 'delete prod users')).toBe('require')
   expect(route(analysis({ confidence: conf(0.2), questions: Q }), { ...s, mode: 'quick' }, 'x')).toBe('proceed')
   expect(route(analysis({ confidence: conf(0.2), questions: [] }), s, 'x')).toBe('proceed')
-  expect(route(analysis({ confidence: conf(0.7), questions: Q }), { ...s, mode: 'deep' }, 'add x')).toBe('ask')
+  expect(route(analysis({ confidence: conf(0.6), questions: Q }), { ...s, mode: 'deep' }, 'add x')).toBe('ask')
   // Thresholds are settings.
   expect(route(analysis({ confidence: conf(0.5), questions: Q }), { ...s, askBelow: 0.3 }, 'add x')).toBe('proceed')
 })
@@ -133,9 +133,9 @@ test('Secrets are redacted, ordinary text is not', async () => {
 
 test('Assembly adds the skills line first and labelled assumptions last, per profile', async () => {
   expect(assemble('Do it.', { profile: 'claude', skills: ['tdd'], assumptions: ['x'] })).toBe(
-    'Use these skills: tdd.\n\nDo it.\n\n<assumptions>\nThese are guesses; check each and stop to ask if one is wrong:\n- x\n</assumptions>',
+    'Use these skills: tdd.\n\nDo it.\n\n<assumptions>Assumed: x. If one is wrong, stop and ask.</assumptions>',
   )
-  expect(assemble('Do it.', { profile: 'gpt', skills: [], assumptions: ['x'] })).toContain('## Assumptions')
+  expect(assemble('Do it.', { profile: 'gpt', skills: [], assumptions: ['x'] })).toContain('Assumed: x. If one is wrong, stop and ask.')
   expect(assemble('Do it.', { profile: 'claude', skills: [], assumptions: [] })).toBe('Do it.')
 })
 
