@@ -1,0 +1,6 @@
+{
+  "name": "prompt-enhancer-plus",
+  "version": "0.3.0",
+  "description": "A band above the prompt that rewrites your draft in place: fixes spelling and grammar, picks the kind of task and its best prompt template, and names the skills the agent should load.",
+  "types": "./types/index.d.ts"
+}
