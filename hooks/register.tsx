@@ -4,7 +4,8 @@ import {
   DEFAULT_SETTINGS,
   MODES,
   PROFILES,
-  analysisRequest,
+  ANALYSIS_RULES,
+  analysisVariable,
   assemble,
   evaluate,
   extractPrompt,
@@ -58,6 +59,7 @@ function readSettings(options: Record<string, unknown>) {
     target,
     askBelow: num(options.askBelow, DEFAULT_SETTINGS.askBelow, 0, 1),
     assumeBelow: num(options.assumeBelow, DEFAULT_SETTINGS.assumeBelow, 0, 1),
+    riskAskBelow: num(options.riskAskBelow, DEFAULT_SETTINGS.riskAskBelow, 0, 1),
     maxRounds: Math.round(num(options.maxRounds, DEFAULT_SETTINGS.maxRounds, 0, 5)),
   }
   clarifyStyle = options.clarify === 'band' ? 'band' : 'dialog'
@@ -142,7 +144,14 @@ function guard($: EngineInterface, v: number) {
 
 // The session's own model over its transcript first; a plain completion when there is nothing
 // to fork, the fork fails, or it outlasts the timeout; one retry on a failed completion.
-async function callModel($: EngineInterface, prompt: string, check: () => Promise<void>, preferFork = true): Promise<Call> {
+// A request is a string, or a fixed opening and a variable rest: the opening is marked for the
+// prompt cache on a plain completion, so repeated enhancements reuse it.
+type Ask = string | { fixed: string; variable: string }
+const joined = (a: Ask) => (typeof a === 'string' ? a : `${a.fixed}\n\n${a.variable}`)
+
+async function callModel($: EngineInterface, ask: Ask, check: () => Promise<void>, preferFork = true): Promise<Call> {
+  const prompt = joined(ask)
+  const blocks = typeof ask === 'string' ? prompt : [{ text: ask.fixed, cache: true as const }, { text: `\n\n${ask.variable}` }]
   if (preferFork) {
     // The fork takes no signal: a timer bounds it, and is cut as soon as the fork answers.
     const timer = new AbortController()
@@ -162,7 +171,7 @@ async function callModel($: EngineInterface, prompt: string, check: () => Promis
   for (let attempt = 0; attempt < 2; attempt++) {
     controller = new AbortController()
     const done = await $.model.complete(
-      { model: FALLBACK_MODEL, prompt, maxTokens: 6000, timeoutMs: CALL_TIMEOUT_MS },
+      { model: FALLBACK_MODEL, prompt: blocks, maxTokens: 6000, timeoutMs: CALL_TIMEOUT_MS },
       { signal: controller.signal },
     )
     await check()
@@ -173,12 +182,12 @@ async function callModel($: EngineInterface, prompt: string, check: () => Promis
   throw new Error(`model call failed: ${reason}`)
 }
 
-async function analyze($: EngineInterface, request: string, check: () => Promise<void>): Promise<Analysis> {
-  const parsed = parseAnalysis((await callModel($, request, check)).text)
+async function analyze($: EngineInterface, variable: string, check: () => Promise<void>): Promise<Analysis> {
+  const parsed = parseAnalysis((await callModel($, { fixed: ANALYSIS_RULES, variable }, check)).text)
   if (parsed) return parsed
   // One repair, then give up rather than loop.
   await update($, step, () => 'Repairing reply…')
-  const repaired = parseAnalysis((await callModel($, `${request}\n\nYour last reply was not the JSON object asked for. Reply with that JSON object only.`, check, false)).text)
+  const repaired = parseAnalysis((await callModel($, { fixed: ANALYSIS_RULES, variable: `${variable}\n\nYour last reply was not the JSON object asked for. Reply with that JSON object only.` }, check, false)).text)
   if (!repaired) throw new Error('the model reply was not valid')
   return repaired
 }
@@ -224,13 +233,14 @@ async function smart($: EngineInterface, draft: string, mode: Mode, s: Settings,
   const skills = skillCandidates(installed, draft)
   const answers: { question: string; answer: string }[] = []
   const asked = new Set<string>()
-  const build = () => analysisRequest({ draft, mode, profile, includeSkills, skills, context: ctx.text, answers })
+  const build = () => analysisVariable({ draft, mode, profile, includeSkills, skills, context: ctx.text, answers })
   await update($, step, () => 'Understanding the request…')
   let analysis = await analyze($, build(), check)
   let unresolved = false
   for (let round = 1; ; round++) {
     const r = route(analysis, s, draft)
-    const q = analysis.questions.find(x => !asked.has(x.question.toLowerCase()))
+    // A risky request may ask any question; otherwise only one whose answer changes the work.
+    const q = analysis.questions.find(x => (x.critical || r === 'require') && !asked.has(x.question.toLowerCase()))
     if ((r !== 'ask' && r !== 'require') || !q) break
     if (round > s.maxRounds) {
       unresolved = true
@@ -249,7 +259,11 @@ async function smart($: EngineInterface, draft: string, mode: Mode, s: Settings,
   const conf = Math.min(...Object.values(analysis.confidence))
   // Assumptions are shown, labelled and reversible, whenever the reading was not a sure one.
   const assumptions = unresolved || conf < s.assumeBelow ? analysis.assumptions.slice(0, 5) : []
-  const { kept, dropped } = includeSkills ? verifySkills(analysis.skills, installed, mode === 'deep' ? 5 : 3) : { kept: [], dropped: [] }
+  // Installed, and among the candidates the model saw described: a pick by name alone is left out.
+  const verified = includeSkills ? verifySkills(analysis.skills, installed, mode === 'deep' ? 5 : 3) : { kept: [], dropped: [] }
+  const offered = new Set(skills.names)
+  const kept = verified.kept.filter(k => offered.has(k))
+  const dropped = [...verified.dropped, ...verified.kept.filter(k => !offered.has(k))]
   const shape = (body: string) => assemble(body, { profile, skills: kept, assumptions })
   const result: Result = { prompt: shape(analysis.prompt), analysis, answers: answers.map(x => x.answer), assumptions, skills: kept, dropped }
 
@@ -530,7 +544,7 @@ export const register: Register = (on, options) => {
               <Text dimColor>Original: {p.original.split('\n').slice(0, 3).join(' ⏎ ').slice(0, 300)}</Text>
               {p.answers.length ? <Text dimColor>Your answers: {p.answers.join(' · ')}</Text> : null}
               {p.assumptions.length ? <Text dimColor>Assumptions: {p.assumptions.join(' · ').slice(0, 300)}</Text> : null}
-              {p.dropped.length ? <Text dimColor>Not installed, left out: {p.dropped.join(', ')}</Text> : null}
+              {p.dropped.length ? <Text dimColor>Left out (not installed or not a described match): {p.dropped.join(', ')}</Text> : null}
               {p.issues.length ? <Text dimColor>Checker: {p.issues.join(' · ').slice(0, 300)}</Text> : null}
             </Box>
           ) : null}

@@ -1,14 +1,15 @@
 {
   "name": "prompt-enhancer-plus",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Prompt Enhancer++: a band above the prompt that understands a rough draft, fixes its spelling, asks only the questions that matter, names installed skills that fit, and rewrites it for the target model.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "mode": { "type": "string", "title": "Default mode", "description": "quick: typo and grammar fixes only; smart: intent, structure, skills and questions when needed; deep: closer reading, staged plans and verification.", "default": "smart", "options": ["quick", "smart", "deep"] },
     "target": { "type": "string", "title": "Target model", "description": "auto writes for the model this session runs and names its skills; the others write a portable prompt for another model, with no skills.", "default": "auto", "options": ["auto", "claude", "gpt", "reasoning", "gemini", "universal"] },
     "clarify": { "type": "string", "title": "Clarification style", "description": "dialog uses Claude Code's question dialog and falls back to the band; band always asks in the row above the prompt.", "default": "dialog", "options": ["dialog", "band"] },
-    "askBelow": { "type": "number", "title": "Ask below confidence", "description": "Ask a question when the lowest confidence is under this (0 to 1).", "default": 0.55 },
-    "assumeBelow": { "type": "number", "title": "Label assumptions below confidence", "description": "Under this confidence the prompt lists its assumptions; risky work also asks (0 to 1).", "default": 0.7 },
+    "askBelow": { "type": "number", "title": "Ask below confidence", "description": "Ask a critical question when the lowest confidence is under this (0 to 1).", "default": 0.4 },
+    "assumeBelow": { "type": "number", "title": "Label assumptions below confidence", "description": "Under this confidence the prompt lists its assumptions (0 to 1).", "default": 0.7 },
+    "riskAskBelow": { "type": "number", "title": "Ask on risky work below confidence", "description": "Production data, deletion, deployment, payments, permissions or secrets: ask under this confidence (0 to 1).", "default": 0.6 },
     "maxRounds": { "type": "number", "title": "Most clarification rounds", "description": "How many questions one enhancement may ask (0 to 5).", "default": 3 }
   }
 }

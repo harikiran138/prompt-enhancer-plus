@@ -40,7 +40,7 @@ function analysis(over: Partial<Analysis> = {}): Analysis {
     ...over,
   }
 }
-const Q = [{ question: 'Which?', options: ['A', 'B'] }]
+const Q = [{ question: 'Which?', options: ['A', 'B'], critical: true }]
 const conf = (n: number) => ({ intent: n, scope: n, target: n, behavior: n })
 
 test('Golden: every exact token the set marks is protected', async () => {
@@ -88,13 +88,15 @@ test('Routing: sure proceeds, medium assumes, low asks, risky asks, quick never 
   const s = DEFAULT_SETTINGS
   expect(route(analysis({ confidence: conf(0.9), questions: Q }), s, 'add x')).toBe('proceed')
   expect(route(analysis({ confidence: conf(0.6), questions: Q, assumptions: ['a'] }), s, 'add x')).toBe('assume')
-  expect(route(analysis({ confidence: conf(0.4), questions: Q }), s, 'add x')).toBe('ask')
-  expect(route(analysis({ confidence: conf(0.6), questions: Q }), s, 'delete prod users')).toBe('require')
+  expect(route(analysis({ confidence: conf(0.3), questions: Q }), s, 'add x')).toBe('ask')
+  // A low-confidence question that would only polish the result is not asked.
+  expect(route(analysis({ confidence: conf(0.3), questions: [{ ...Q[0]!, critical: false }] }), s, 'add x')).toBe('proceed')
+  expect(route(analysis({ confidence: conf(0.5), questions: Q }), s, 'delete prod users')).toBe('require')
   expect(route(analysis({ confidence: conf(0.2), questions: Q }), { ...s, mode: 'quick' }, 'x')).toBe('proceed')
   expect(route(analysis({ confidence: conf(0.2), questions: [] }), s, 'x')).toBe('proceed')
   expect(route(analysis({ confidence: conf(0.6), questions: Q }), { ...s, mode: 'deep' }, 'add x')).toBe('ask')
   // Thresholds are settings.
-  expect(route(analysis({ confidence: conf(0.5), questions: Q }), { ...s, askBelow: 0.3 }, 'add x')).toBe('proceed')
+  expect(route(analysis({ confidence: conf(0.35), questions: Q }), { ...s, askBelow: 0.3 }, 'add x')).toBe('proceed')
 })
 
 test('Parsing tolerates fences and gaps, rejects non-JSON and a missing prompt', async () => {
@@ -120,7 +122,9 @@ test('Skill verification keeps installed names, in their own spelling, up to the
   })
   const { described, names } = skillCandidates([{ name: 'ui-review', description: 'review a user interface' }, { name: 'tax-prep' }], 'review my dashboard ui')
   expect(described.map(s => s.name)).toEqual(['ui-review'])
-  expect(names).toEqual(['ui-review', 'tax-prep'])
+  expect(names).toEqual(['ui-review'])
+  // A typo past the fourth letter still finds the skill.
+  expect(skillCandidates([{ name: 'debugging-root-cause', description: 'find the cause of a failure' }], 'debuging the crash').names).toEqual(['debugging-root-cause'])
 })
 
 test('Secrets are redacted, ordinary text is not', async () => {

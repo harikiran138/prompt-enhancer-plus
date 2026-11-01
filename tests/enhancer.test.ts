@@ -30,6 +30,9 @@ type Fake = {
   onAsk?: ($: unknown) => Promise<void> | void
 }
 
+// What each test skill says it does: the ranking matches drafts against these lines.
+const LINES: Record<string, string> = { 'ui-styling': 'style a dashboard, page or screen', debug: 'debug a crash or failure' }
+
 const ok = (text: string): Reply => ({ isAnswered: true, text, usage: USAGE })
 
 // The analysis JSON the model is asked for, with sure defaults a test overrides.
@@ -59,7 +62,7 @@ function analysis(prompt: string, over: Record<string, unknown> = {}) {
 }
 
 const UNSURE = {
-  confidence: { intent: 0.4, scope: 0.4, target: 0.5, behavior: 0.4 },
+  confidence: { intent: 0.3, scope: 0.3, target: 0.35, behavior: 0.3 },
   assumptions: ['Keep the current navigation'],
   questions: [{ question: 'What should I prioritize?', options: ['Visual redesign', 'Functional fixes', 'Both', 'Audit first'], recommended: 2 }],
 }
@@ -97,7 +100,7 @@ function engine(on: On): Fake {
   on('session.model', () => ({ value: fake.model }))
   on('fs.stat', () => ({ deny: 'ENOENT' }))
   on('fs.read', () => ({ deny: 'ENOENT' }))
-  on('command.list', () => ({ value: fake.skills.map(name => ({ name, description: `${name} helper`, source: 'user' as const })) }))
+  on('command.list', () => ({ value: fake.skills.map(name => ({ name, description: LINES[name] ?? `${name} helper`, source: 'user' as const })) }))
   on('session.usage', () => ({
     value: { context: { breakdown: { skills: { skillFrontmatter: fake.skills.map(name => ({ name })) } } } } as never,
   }))
@@ -140,13 +143,13 @@ test('Enhance falls back to a plain completion before the first turn', async ($,
   const fake = engine(on)
   fake.forkable = false
   for (const surface of SURFACES) {
-    reset(fake, 'fix login', [ok(analysis('Fix the login bug.'))])
+    reset(fake, 'fix login crash', [ok(analysis('Fix the login crash.'))])
     const ui = await mount($, surface)
     await ui.press({ key: 'enhance' })
-    expect(fake.text).toBe('Fix the login bug.')
+    expect(fake.text).toBe('Fix the login crash.')
     const sent = fake.asks.join('\n')
     expect(sent).toContain('Project folder: /work/app')
-    expect(sent).toContain('All installed names: ui-styling, debug')
+    expect(sent).toContain('<skills>\n- debug: debug a crash or failure\n</skills>')
     expect(sent).toContain('Fix every spelling and grammar error')
     await ui.unmount()
   }
@@ -382,7 +385,7 @@ test('High-risk work with a question asks even at medium confidence', { options:
   const clock = mock.clock(on)
   const medium = {
     risk: 'high',
-    confidence: { intent: 0.6, scope: 0.6, target: 0.6, behavior: 0.6 },
+    confidence: { intent: 0.5, scope: 0.5, target: 0.5, behavior: 0.5 },
     questions: [{ question: 'Which users count as old?', options: ['No login for a year', 'Never verified'] }],
   }
   reset(fake, 'delete old users from production db', [ok(analysis('Delete old users.', medium)), ok(analysis('Find users with no login for a year; confirm before deleting.'))])
@@ -430,7 +433,7 @@ test('Only installed skills are named; unknown ones are left out and reported', 
   await ui.press({ key: 'enhance' })
   expect(fake.text).toBe('Use these skills: debug.\n\nFind the crash cause.')
   await ui.press({ key: 'compare' })
-  expect(await ui.find({ type: 'Text', text: /Not installed, left out: made-up-skill/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Left out \(not installed or not a described match\): made-up-skill/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -441,7 +444,7 @@ test('With no skills installed the prompt names none', async ($, on) => {
   const ui = await mount($, 'terminal')
   await ui.press({ key: 'enhance' })
   expect(fake.text).toBe('Find the crash cause.')
-  expect(fake.asks[0]).toContain('All installed names: (none listed)')
+  expect(fake.asks[0]).toContain('(no installed skill matches this draft: choose none)')
   await ui.unmount()
 })
 
@@ -524,12 +527,12 @@ test('/enhance prints the rewrite, asks nothing, and leaves the box alone', asyn
   const fake = engine(on)
   reset(fake, 'my own draft', [ok(analysis('Improve the student dashboard.', { ...UNSURE, skills: ['ui-styling'] }))])
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({}))
+  on('command.register', () => ({}) as never)
   await $.session.start({ cwd: '/work/app', surface: 'terminal', isInteractive: true })
-  const { text } = await $.command.run({ command: 'enhance', args: 'improve my student dashboard' })
+  const { text } = await $.command.run({ command: 'enhance', args: 'improve my student dashboard' } as never)
   expect(text).toContain('Use these skills: ui-styling.')
   expect(text).toContain('Assumed: Keep the current navigation.')
   expect(text).toContain('would ask: What should I prioritize?')
   expect(fake.text).toBe('my own draft')
-  expect((await $.command.run({ command: 'enhance', args: '' })).text).toContain('Usage: /enhance')
+  expect((await $.command.run({ command: 'enhance', args: '' } as never)).text).toContain('Usage: /enhance')
 })

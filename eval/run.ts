@@ -144,15 +144,16 @@ async function runV4(c: GoldenCase, installed: SkillInfo[]) {
   const firstRoute = route(a, DEFAULT_SETTINGS, c.draft)
   const asked: string[] = []
   // The simulated author takes the recommended option, else the first; one round at most here.
-  if ((firstRoute === 'ask' || firstRoute === 'require') && a.questions[0]) {
-    const q = a.questions[0]
+  const pick = a.questions.find(q => q.critical || firstRoute === 'require')
+  if ((firstRoute === 'ask' || firstRoute === 'require') && pick) {
+    const q = pick
     asked.push(`${q.question} [${q.options.join(' | ')}]`)
     answers.push({ question: q.question, answer: q.options[q.recommended ?? 0]! })
     a = (await analyze()) ?? a
   }
   const conf = Math.min(...Object.values(a.confidence))
   const assumptions = conf < DEFAULT_SETTINGS.assumeBelow ? a.assumptions.slice(0, 5) : []
-  const { kept } = verifySkills(a.skills, installed, 3)
+  const kept = verifySkills(a.skills, installed, 3).kept.filter(k => skills.names.includes(k))
   let prompt = assemble(a.prompt, { profile: 'claude', skills: kept, assumptions })
   const evalArgs = { draft: c.draft, analysis: a, answers: answers.map(x => x.answer), profile: 'claude' as const, installedSkills: installed, knownPaths: [], mode: 'smart' as const }
   const first = evaluate({ ...evalArgs, prompt })
@@ -266,6 +267,6 @@ function median(xs: number[]) {
   return s.length ? s[Math.floor(s.length / 2)]! : 0
 }
 
-const stamp = new Date().toISOString().slice(0, 10)
+const stamp = `${new Date().toISOString().slice(0, 10)}-${(await sh`git rev-parse --short HEAD`.quiet().text()).trim()}`
 await Bun.write(`eval/results/${split}-${stamp}.json`, JSON.stringify({ summary, rows }, null, 1))
 console.log(JSON.stringify(summary, null, 1))
