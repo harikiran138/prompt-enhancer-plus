@@ -8,7 +8,7 @@ Prompt enhancer++ [ Enhance ] [ Send ] [ Mode: Smart ]  ctrl+x tab · e enhance 
 ❯ fix teh login bug its not workng when pasword has speical charcters
 ```
 
-**0.6.0** applies the context-engineering shifts: the built-in instructions are principles with reasons instead of rules, only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix), and enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them. The eval in `eval/` has not been re-run on 0.6.0.
+**0.6.0** applies the context-engineering shifts: the built-in instructions are principles with reasons instead of rules, only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix), and enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them. The eval (on the `eval` branch) has not been re-run on 0.6.0.
 
 ## What it uses and sends
 
@@ -147,21 +147,21 @@ All of this is passed to the model as data inside tags. Text in the draft or the
 | `tests/core.test.ts` | 13 unit tests, including deterministic checks over the 100-prompt golden set. |
 | `tests/keybindings.test.ts`, `tests/prompt-enhancer-compose.test.tsx` | The v0.3.0 hint and band-composition tests, kept. |
 | `tests/golden/prompts.ts` | The golden set: 100 rough prompts, 50 dev and 50 held-out. |
-| `eval/run.ts` | Live comparison with v0.3.0 on the golden set through the real model; results go in `eval/results/`. |
 
 ## Develop
 
 ```sh
 claude plugin validate .
 claude plugin test .
-bun eval/run.ts heldout       # live comparison, about $0.10 per prompt (isolated claude -p, sonnet)
 ```
+
+The live eval (`eval/run.ts`, about $0.10 per prompt through an isolated `claude -p`) and its results live on the [`eval` branch](https://github.com/harikiran138/prompt-enhancer-plus/tree/eval), so the plugin ships only what it runs.
 
 v0.3.0 is the first commit in the git history, so you can always go back to it. Changes per version are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Measured results (2026-11-01, held-out half, 50 prompts)
 
-Both versions ran through the same isolated `claude -p --model sonnet`, with the same 803 local skills. Full rows are in `eval/results/heldout-2026-11-01.json`.
+Both versions ran through the same isolated `claude -p --model sonnet`, with the same 803 local skills. Full rows are in `eval/results/heldout-2026-11-01.json` on the `eval` branch.
 
 | Measure | v0.3.0 | v0.4.0 |
 |---|---|---|
