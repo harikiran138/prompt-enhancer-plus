@@ -1,0 +1,3 @@
+node_modules/
+# runs cut short (usage limits) are not results
+eval/results/INVALID-*

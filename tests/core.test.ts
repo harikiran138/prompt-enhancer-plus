@@ -10,6 +10,7 @@ import {
   redactSecrets,
   route,
   skillCandidates,
+  strategiesFor,
   substantive,
   verifySkills,
 } from '../hooks/core'
@@ -181,4 +182,12 @@ test('Adding requirements never raises the score', async () => {
   const faithful = evaluate(base('Fix the bug in src/auth/login.ts. Do not touch the scoring logic. Run the login tests.'))
   const padded = evaluate(base('Fix the bug in src/auth/login.ts. Do not touch the scoring logic. Run the login tests. Also add dark mode, then publish a release.'))
   expect(padded.score).toBeLessThan(faithful.score)
+})
+
+test('strategiesFor sends only the guides the draft points at, plus the question fallback', () => {
+  const fix = strategiesFor('fix the login bug, error on save')
+  expect(fix).toContain('fix / debugging:')
+  expect(fix).not.toContain('database-migration')
+  expect(fix.split('\n').length).toBeLessThanOrEqual(4)
+  expect(strategiesFor('hmm')).toContain('build:')
 })

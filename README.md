@@ -1,4 +1,4 @@
-# Prompt Enhancer++ (prompt-enhancer-plus 0.4.0)
+# Prompt Enhancer++ (prompt-enhancer-plus 0.6.0)
 
 A Claude Code mod that turns a rough, typo-filled prompt into a clear, executable one, in place, before you send it. It reads what you actually want, fixes the spelling and grammar, asks a question only when the answer would change the work, names installed skills that fit, and writes the prompt for the model that will read it. It never sends anything itself.
 
@@ -6,6 +6,15 @@ A Claude Code mod that turns a rough, typo-filled prompt into a clear, executabl
 Prompt enhancer++ [ Enhance ] [ Send ] [ Mode: Smart ]  ctrl+x tab · e enhance · s send · m mode · esc back
 ────────────────────────────────────────────────────────────────────
 ❯ fix teh login bug its not workng when pasword has speical charcters
+```
+
+**0.6.0** applies the context-engineering shifts: the built-in instructions are principles with reasons instead of rules, only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix), and enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them. The eval in `eval/` has not been re-run on 0.6.0.
+
+## Install
+
+```sh
+claude plugin marketplace add harikiran138/prompt-enhancer-plus
+claude plugin install prompt-enhancer-plus@prompt-enhancer-plus
 ```
 
 ## Use it
@@ -138,7 +147,7 @@ claude plugin test .
 bun eval/run.ts heldout       # live comparison, about $0.10 per prompt (isolated claude -p, sonnet)
 ```
 
-v0.3.0 is the first commit in this folder's git history (`git show c315da3`), so you can always go back to it.
+v0.3.0 is the first commit in the git history, so you can always go back to it. Changes per version are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Measured results (2026-11-01, held-out half, 50 prompts)
 
@@ -173,3 +182,7 @@ The chord that focuses the row is Claude Code's `abovePrompt:focus` action (`ctr
 - **`$.ui.ask` may not be available everywhere.** Where it rejects, the question falls back to the row.
 - **The transcript labels a sent prompt as from the plugin** (`asUser: true` keeps the model reading it as yours). Enter sends it as an ordinary prompt.
 - **Long rewrites can push the row off a short terminal.** The keys still reach it.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

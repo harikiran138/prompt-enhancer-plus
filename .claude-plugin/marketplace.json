@@ -1,0 +1,14 @@
+{
+  "name": "prompt-enhancer-plus",
+  "owner": {
+    "name": "harikiran138"
+  },
+  "description": "Prompt Enhancer++ for Claude Code: rewrites a rough draft into a clear prompt before you send it.",
+  "plugins": [
+    {
+      "name": "prompt-enhancer-plus",
+      "source": "./",
+      "description": "Prompt Enhancer++: turns a rough, typo-filled draft into a clear prompt in place, before you send it."
+    }
+  ]
+}
