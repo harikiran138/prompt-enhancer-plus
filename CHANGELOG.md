@@ -5,10 +5,10 @@
 - Built-in instructions are principles with reasons instead of rules.
 - Only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix).
 - Enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them.
-- The eval has not been re-run on this version.
+- The evaluation has not been re-run on this version.
 - Icon, and a README section on what it uses and sends.
 - The golden set lives only in `tests/golden/prompts.ts`; the Python generator and the unused JSON copy are gone.
-- The live eval moved to the `eval` branch; the plugin ships only what it runs.
+- The live evaluation moved to the `benchmark` branch; the plugin ships only what it runs.
 
 ## 0.5.0 (2026-11-01)
 
@@ -17,7 +17,7 @@
 ## 0.4.0 (2026-11-01)
 
 - Intent engine, clarification, model profiles, quality checker, tests.
-- `/enhance` command, calibrated thresholds, eval results.
+- `/enhance` command, calibrated thresholds, evaluation results.
 
 ## 0.3.0 (2026-11-01)
 

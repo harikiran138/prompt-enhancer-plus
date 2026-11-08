@@ -1,6 +1,6 @@
 // The enhancer's engine, free of `$`: request builders, the reply parser, routing,
 // model profiles, skill verification, secret redaction and the quality evaluator.
-// register.tsx drives it; the tests (and eval/run.ts on the eval branch) call it directly.
+// register.tsx drives it; the tests (and the benchmark branch's runner) call it directly.
 
 export const VERSION = '0.6.0'
 

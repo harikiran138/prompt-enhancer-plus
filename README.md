@@ -8,7 +8,7 @@ Prompt enhancer++ [ Enhance ] [ Send ] [ Mode: Smart ]  ctrl+x tab · e enhance 
 ❯ fix teh login bug its not workng when pasword has speical charcters
 ```
 
-**0.6.0** applies the context-engineering shifts: the built-in instructions are principles with reasons instead of rules, only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix), and enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them. The eval (on the `eval` branch) has not been re-run on 0.6.0.
+**0.6.0** applies the context-engineering shifts: the built-in instructions are principles with reasons instead of rules, only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix), and enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them. The evaluation (on the `benchmark` branch) has not been re-run on 0.6.0.
 
 ## What it uses and sends
 
@@ -155,13 +155,13 @@ claude plugin validate .
 claude plugin test .
 ```
 
-The live eval (`eval/run.ts`, about $0.10 per prompt through an isolated `claude -p`) and its results live on the [`eval` branch](https://github.com/harikiran138/prompt-enhancer-plus/tree/eval), so the plugin ships only what it runs.
+The live evaluation (about $0.10 per prompt through an isolated `claude -p`) and its results live on the [`benchmark` branch](https://github.com/harikiran138/prompt-enhancer-plus/tree/benchmark), so the plugin ships only what it runs.
 
 v0.3.0 is the first commit in the git history, so you can always go back to it. Changes per version are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Measured results (2026-11-01, held-out half, 50 prompts)
 
-Both versions ran through the same isolated `claude -p --model sonnet`, with the same 803 local skills. Full rows are in `eval/results/heldout-2026-11-01.json` on the `eval` branch.
+Both versions ran through the same isolated `claude -p --model sonnet`, with the same 803 local skills. Full rows are on the `benchmark` branch, in the results folder.
 
 | Measure | v0.3.0 | v0.4.0 |
 |---|---|---|
