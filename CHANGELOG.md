@@ -6,6 +6,7 @@
 - Only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix).
 - Enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them.
 - The eval in `eval/` has not been re-run on this version.
+- Icon, and a README section on what it uses and sends.
 
 ## 0.5.0 (2026-11-01)
 

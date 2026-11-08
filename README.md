@@ -10,6 +10,13 @@ Prompt enhancer++ [ Enhance ] [ Send ] [ Mode: Smart ]  ctrl+x tab · e enhance 
 
 **0.6.0** applies the context-engineering shifts: the built-in instructions are principles with reasons instead of rules, only the task-type guides the draft points at are sent (about 16% shorter request on a typical fix), and enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them. The eval in `eval/` has not been re-run on 0.6.0.
 
+## What it uses and sends
+
+- **Your Claude usage.** Each Enhance runs one or two model calls on your own plan or API account, through Claude Code (a forked call that sees the conversation, or a plain completion). Smart and Deep cost more than Quick. Nothing runs until you press Enhance or use `/enhance`.
+- **What it reads.** Your draft, the conversation so far, and the small bits of project context listed in [Context it reads](#context-it-reads). It never reads your memory files and never reads the whole disk.
+- **What it changes.** Only the prompt box, and only after you press Enhance. Restore puts your draft back. It never sends a prompt on its own; Send is always your key press.
+- **Where data goes.** Only to the model Claude Code is already using. It makes no other network requests, keeps no logs of your prompts, and stores only your chosen mode.
+
 ## Install
 
 ```sh
