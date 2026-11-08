@@ -4,6 +4,10 @@
   "author": { "name": "harikiran138", "url": "https://github.com/harikiran138" },
   "license": "MIT",
   "repository": "https://github.com/harikiran138/prompt-enhancer-plus",
+  "homepage": "https://github.com/harikiran138/prompt-enhancer-plus",
+  "documentationUrl": "https://github.com/harikiran138/prompt-enhancer-plus#readme",
+  "supportUrl": "https://github.com/harikiran138/prompt-enhancer-plus/issues",
+  "privacyPolicyUrl": "https://github.com/harikiran138/prompt-enhancer-plus/blob/main/PRIVACY.md",
   "description": "Prompt Enhancer++: a band above the prompt that understands a rough draft, fixes its spelling, asks only the questions that matter, names installed skills that fit, and rewrites it for the target model.",
   "types": "./types/index.d.ts",
   "userConfig": {

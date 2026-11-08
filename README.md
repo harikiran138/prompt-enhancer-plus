@@ -193,6 +193,10 @@ The chord that focuses the row is Claude Code's `abovePrompt:focus` action (`ctr
 - **The transcript labels a sent prompt as from the plugin** (`asUser: true` keeps the model reading it as yours). Enter sends it as an ordinary prompt.
 - **Long rewrites can push the row off a short terminal.** The keys still reach it.
 
+## Privacy
+
+See [PRIVACY.md](PRIVACY.md). In short: it sends data only to the model Claude Code already uses, and keeps only your chosen mode.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
