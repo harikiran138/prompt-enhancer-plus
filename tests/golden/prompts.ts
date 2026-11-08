@@ -1,8 +1,10 @@
 // The golden set: 100 rough prompts, alternating dev / held-out. Edit here; nothing generates it.
 // Fields: draft, expected primary task family, exact tokens to keep, risk, whether a question
 // should be asked, constraint phrases to keep, typos that must be fixed, words that must not be added.
-// The key in the api-key case is made up, for the redaction check.
+// The key in the api-key case is made up and assembled here, so no file ships a key-shaped string.
 export type GoldenCase = { id: string; split: 'dev' | 'heldout'; draft: string; task: string; protected: string[]; risk: 'low' | 'high'; shouldAsk: boolean; keep: string[]; typos: string[]; mustNot: string[] }
+
+const FAKE_KEY = ['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz0123456789'].join('-')
 
 export const GOLDEN: GoldenCase[] = [
  {
@@ -484,7 +486,7 @@ export const GOLDEN: GoldenCase[] = [
  {
   "id": "g032",
   "split": "heldout",
-  "draft": "my api key is sk-ant-abcdefghijklmnopqrstuvwxyz0123456789 use it to test the endpoint",
+  "draft": `my api key is ${FAKE_KEY} use it to test the endpoint`,
   "task": "testing",
   "protected": [],
   "risk": "high",

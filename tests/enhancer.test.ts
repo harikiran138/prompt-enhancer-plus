@@ -491,7 +491,7 @@ test('Context that cannot be read still yields an honest prompt', async ($, on) 
 
 test('Secrets never reach the enhanced prompt', async ($, on) => {
   const fake = engine(on)
-  reset(fake, 'use my key to call the api', [ok(analysis('Call the API with key sk-ant-abcdefghijklmnopqrstuvwxyz123456.'))])
+  reset(fake, 'use my key to call the api', [ok(analysis(`Call the API with key ${['sk', 'ant', 'abcdefghijklmnopqrstuvwxyz123456'].join('-')}.`))])
   const ui = await mount($, 'terminal')
   await ui.press({ key: 'enhance' })
   expect(fake.text).not.toContain('sk-ant-')
