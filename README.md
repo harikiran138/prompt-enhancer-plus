@@ -69,9 +69,9 @@ Press `m` to cycle. The mode is remembered across sessions. The default is set b
 1. **Understand.** One model call returns a structured reading of the draft. It keeps the corrected text, the primary and secondary intents, the task types (25 kinds), the desired outcome and target, and observed facts, kept apart from requirements. Explicit requirements are kept apart from inferred ones, with prohibited changes, assumptions, missing information, risks, a risk level, a confidence per dimension (intent, scope, target, behaviour), skill picks, questions, verification checks and the draft prompt. "Make everything work properly" is read as *improve reliability*, not *rewrite*. "Don't add anything new" stays a hard limit. "Fix X" stays a debugging task until the cause is found.
 2. **Route.** Local rules use the lowest of the four confidences:
    - **High** (≥ 0.7): goes straight on.
-   - **Medium** (0.55–0.7): goes on with its assumptions written into the prompt as one line ("Assumed: …. If one is wrong, stop and ask.").
-   - **Low** (< 0.55): asks.
-   - **High risk** (production data, deletion, deployment, payments, permissions, secrets, migrations): asks below 0.7 even when otherwise sure enough. Risk comes from the model and from a local word check, whichever is higher.
+   - **Medium** (0.4–0.7): goes on with its assumptions written into the prompt as one line ("Assumed: …. If one is wrong, stop and ask."). In Deep mode, a critical question is asked here instead.
+   - **Low** (< 0.4): asks its critical question.
+   - **High risk** (production data, deletion, deployment, payments, permissions, secrets, migrations): asks below 0.6 even when otherwise sure enough. Risk comes from the model and from a local word check, whichever is higher.
 
    A question is asked only if the model offered a specific one. The thresholds are options.
 3. **Clarify.** See below.
