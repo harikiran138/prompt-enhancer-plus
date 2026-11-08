@@ -16,6 +16,9 @@ Prompt enhancer++ [ Enhance ] [ Send ] [ Mode: Smart ]  ctrl+x tab · e enhance 
 - **What it reads.** Your draft, the conversation so far, and the small bits of project context listed in [Context it reads](#context-it-reads). It never reads your memory files and never reads the whole disk.
 - **What it changes.** Only the prompt box, and only after you press Enhance. Restore puts your draft back. It never sends a prompt on its own; Send is always your key press.
 - **Where data goes.** Only to the model Claude Code is already using. It makes no other network requests, keeps no logs of your prompts, and stores only your chosen mode.
+- **What a sent prompt contains.** When you press Send, it submits exactly the text in the prompt box (your draft, or the rewrite you accepted and could edit) as your own message. It adds nothing hidden: no conversation, file contents or settings go into that prompt unless they are visible in the box.
+- **No credentials.** It reads no keys, tokens or passwords. It reads two environment values, `CLAUDE_CONFIG_DIR` and `HOME`, only to find your `keybindings.json` so the row can show your focus chord. Settings come from the options above, which you set yourself.
+- **Hooks.** `session.start` registers `/enhance` and loads your mode and focus chord. `command.run` answers only `/enhance`, printing the rewrite without sending anything. `ui.render` draws the row above the prompt and passes through whatever other plugins draw there.
 
 ## Install
 

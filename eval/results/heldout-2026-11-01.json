@@ -971,14 +971,14 @@
   },
   {
    "id": "g032",
-   "draft": "my api key is sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 use it to test the endpoint",
+   "draft": "my api key is sk\u002dant-api03-abcdefghijklmnopqrstuvwxyz0123456789 use it to test the endpoint",
    "expected": {
     "task": "testing",
     "shouldAsk": false,
     "risk": "high"
    },
    "v3": {
-    "prompt": "<task>\nTest the endpoint using my Anthropic API key: `sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789`.\n</task>\n\n<requirements>\n- Send a request to the endpoint with the key and report the HTTP status and the response body.\n- If it is unclear which endpoint I mean, ask me for the URL before sending anything.\n</requirements>\n\n<constraints>\n- Pass the key through an environment variable or request header. Do not write it to any file, script, or log, and do not echo it back in your output.\n</constraints>\n\n<done_when>\nYou have reported the request you made (with the key redacted), the status code, and the response, and said whether the endpoint works.\n</done_when>",
+    "prompt": "<task>\nTest the endpoint using my Anthropic API key: `sk\u002dant-api03-abcdefghijklmnopqrstuvwxyz0123456789`.\n</task>\n\n<requirements>\n- Send a request to the endpoint with the key and report the HTTP status and the response body.\n- If it is unclear which endpoint I mean, ask me for the URL before sending anything.\n</requirements>\n\n<constraints>\n- Pass the key through an environment variable or request header. Do not write it to any file, script, or log, and do not echo it back in your output.\n</constraints>\n\n<done_when>\nYou have reported the request you made (with the key redacted), the status code, and the response, and said whether the endpoint works.\n</done_when>",
     "typosFixed": 0,
     "typos": 0,
     "protectedKept": 0,

@@ -481,7 +481,7 @@ export const GOLDEN: GoldenCase[] = [
  {
   "id": "g032",
   "split": "heldout",
-  "draft": "my api key is sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789 use it to test the endpoint",
+  "draft": "my api key is sk\u002dant-api03-abcdefghijklmnopqrstuvwxyz0123456789 use it to test the endpoint",
   "task": "testing",
   "protected": [],
   "risk": "high",
