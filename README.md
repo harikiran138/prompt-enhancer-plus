@@ -112,8 +112,9 @@ Set them in `/config` (each is a row there) or in settings under `pluginConfigs.
 | `mode` | `smart` | Starting mode, until you press `m` |
 | `target` | `auto` | See [Target models](#target-models) |
 | `clarify` | `dialog` | `dialog` or `band` |
-| `askBelow` | `0.55` | Ask when the lowest confidence is below this |
-| `assumeBelow` | `0.7` | Below this, list assumptions; risky work asks |
+| `askBelow` | `0.4` | Ask a critical question when the lowest confidence is below this |
+| `assumeBelow` | `0.7` | Below this, list assumptions |
+| `riskAskBelow` | `0.6` | Risky work (production data, deletion, deployment, payments, permissions, secrets) asks below this |
 | `maxRounds` | `3` | Most questions per enhancement (0–5) |
 
 ## Context it reads
@@ -155,7 +156,7 @@ claude plugin validate .
 claude plugin test .
 ```
 
-The live evaluation (about $0.10 per prompt through an isolated `claude -p`) and its results live on the [`benchmark` branch](https://github.com/harikiran138/prompt-enhancer-plus/tree/benchmark), so the plugin ships only what it runs.
+The live evaluation (about $0.10 per prompt through an isolated `claude -p`) and its results live on the [`benchmark` branch](https://github.com/harikiran138/prompt-enhancer-plus/tree/benchmark), so the mod ships only what it runs.
 
 v0.3.0 is the first commit in the git history, so you can always go back to it. Changes per version are in [CHANGELOG.md](CHANGELOG.md).
 
@@ -190,7 +191,7 @@ The chord that focuses the row is Claude Code's `abovePrompt:focus` action (`ctr
 - **The fork cannot be cancelled mid-flight.** Cancel makes its result stale so it is never written, and it still finishes in the background. A plain completion is cut at once.
 - **The fork sees the conversation up to the last request** the running turn sent.
 - **`$.ui.ask` may not be available everywhere.** Where it rejects, the question falls back to the row.
-- **The transcript labels a sent prompt as from the plugin** (`asUser: true` keeps the model reading it as yours). Enter sends it as an ordinary prompt.
+- **The transcript labels a sent prompt as coming from the mod** (`asUser: true` keeps the model reading it as yours). Enter sends it as an ordinary prompt.
 - **Long rewrites can push the row off a short terminal.** The keys still reach it.
 
 ## Privacy

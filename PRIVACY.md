@@ -23,7 +23,7 @@ Everything above goes only to the model Claude Code is already using, on your ow
 
 ## What it keeps
 
-Only your chosen mode (Quick, Smart or Deep), in Claude Code's plugin storage on your computer. It keeps no logs of your prompts, drafts or answers, and the author receives nothing.
+Only your chosen mode (Quick, Smart or Deep), in Claude Code's storage for the mod, on your computer. It keeps no logs of your prompts, drafts or answers, and the author receives nothing.
 
 ## Contact
 

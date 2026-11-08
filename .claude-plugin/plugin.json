@@ -8,7 +8,7 @@
   "documentationUrl": "https://github.com/harikiran138/prompt-enhancer-plus#readme",
   "supportUrl": "https://github.com/harikiran138/prompt-enhancer-plus/issues",
   "privacyPolicyUrl": "https://github.com/harikiran138/prompt-enhancer-plus/blob/main/PRIVACY.md",
-  "description": "Prompt Enhancer++: a band above the prompt that understands a rough draft, fixes its spelling, asks only the questions that matter, names installed skills that fit, and rewrites it for the target model.",
+  "description": "Prompt Enhancer++, a Claude Code mod: a band above the prompt that understands a rough draft, fixes its spelling, asks only the questions that matter, names installed skills that fit, and rewrites it for the target model.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "mode": { "type": "string", "title": "Default mode", "description": "quick: typo and grammar fixes only; smart: intent, structure, skills and questions when needed; deep: closer reading, staged plans and verification.", "default": "smart", "options": ["quick", "smart", "deep"] },

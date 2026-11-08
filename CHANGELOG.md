@@ -8,7 +8,7 @@
 - The evaluation has not been re-run on this version.
 - Icon, and a README section on what it uses and sends.
 - The golden set lives only in `tests/golden/prompts.ts`; the Python generator and the unused JSON copy are gone.
-- The live evaluation moved to the `benchmark` branch; the plugin ships only what it runs.
+- The live evaluation moved to the `benchmark` branch; the mod ships only what it runs.
 
 ## 0.5.0 (2026-11-01)
 
