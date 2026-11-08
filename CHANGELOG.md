@@ -7,6 +7,7 @@
 - Enhanced prompts for Claude state the goal and done-criteria and point at files and tests instead of restating them.
 - The eval in `eval/` has not been re-run on this version.
 - Icon, and a README section on what it uses and sends.
+- The golden set lives only in `tests/golden/prompts.ts`; the Python generator and the unused JSON copy are gone.
 
 ## 0.5.0 (2026-11-01)
 
